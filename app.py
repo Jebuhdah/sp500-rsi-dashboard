@@ -394,17 +394,30 @@ def run() -> None:
             acc_ids = [aid for aid, _ in accounts]
             if not acc_ids:
                 st.info("No accounts yet. Create one below.")
-            default_a_idx = (
-                acc_ids.index(active_account_id) if active_account_id in acc_ids else 0
-            )
-            pick_a = st.selectbox(
-                "Account",
-                options=range(len(acc_ids)),
-                format_func=lambda i: acc_labels[i],
-                index=default_a_idx,
-                key="pick_account_idx",
-            )
-            active_account_id = acc_ids[pick_a] if acc_ids else None
+                # Clear any stale selection (e.g. from before the first account
+                # existed) so the widget doesn't reuse an invalid stored value
+                # once accounts appear.
+                st.session_state.pop("pick_account_idx", None)
+                active_account_id = None
+            else:
+                default_a_idx = (
+                    acc_ids.index(active_account_id) if active_account_id in acc_ids else 0
+                )
+                # A widget's stored session_state value takes precedence over
+                # `index=` once the key exists. If the previous run left a
+                # value that's no longer a valid option (e.g. None from when
+                # the list was empty, or an index past the new length), reset
+                # it before instantiating the widget this run.
+                stored_pick = st.session_state.get("pick_account_idx")
+                if stored_pick not in range(len(acc_ids)):
+                    st.session_state["pick_account_idx"] = default_a_idx
+                pick_a = st.selectbox(
+                    "Account",
+                    options=range(len(acc_ids)),
+                    format_func=lambda i: acc_labels[i],
+                    key="pick_account_idx",
+                )
+                active_account_id = acc_ids[pick_a] if pick_a is not None else None
             st.session_state["active_account_id"] = active_account_id
 
             new_acc = st.text_input("New account name", key="new_account_name")
