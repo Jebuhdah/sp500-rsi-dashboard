@@ -373,13 +373,18 @@ def save_price_data(
 ) -> None:
     """Persist downloaded prices (PostgreSQL)."""
     records = _rows_for_insert(symbol, data)
+    if not records:
+        return
     url = _effective_database_url(database_url)
     if not url:
         raise ValueError("DATABASE_URL is required (PostgreSQL only).")
     engine = _pg_engine(url)
     with engine.begin() as conn:
-        for row in records:
-            conn.execute(_PG_UPSERT, row)
+        # Pass the whole batch in one call (SQLAlchemy executemany) instead of
+        # looping with a separate round trip per row -- a 1y/1d history is
+        # ~250 rows per symbol, and this used to mean ~250 individual network
+        # round trips to Postgres on every single fetch.
+        conn.execute(_PG_UPSERT, records)
     engine.dispose()
 
 _LOAD_PG = text(
