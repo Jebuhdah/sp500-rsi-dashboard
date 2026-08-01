@@ -57,16 +57,31 @@ def _resolve_dify_api_key(ui_value: str) -> str | None:
     return secret_key or None
 
 
+_SP500_SOURCES = [
+    # datahub.io's own CSV endpoint has been returning 404s; GitHub mirror of the
+    # same "datasets" project (same "Symbol" column schema) as primary source now.
+    "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv",
+    "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv",
+]
+
+
 @st.cache_data(show_spinner=False)
 def get_sp500_symbols() -> list[str]:
     """Fetch S&P 500 constituent symbols and format for Yahoo Finance."""
-    # Use CSV source to avoid optional HTML parsers (lxml/bs4) on locked-down machines.
-    table = pd.read_csv(
-        "https://datahub.io/core/s-and-p-500-companies/r/constituents.csv"
-    )
-    symbols = table["Symbol"].astype(str).str.replace(".", "-", regex=False).tolist()
-    # Keep deterministic ordering and deduplicate.
-    return list(dict.fromkeys(symbols))
+    # Use CSV sources to avoid optional HTML parsers (lxml/bs4) on locked-down machines.
+    last_exc: Exception | None = None
+    for url in _SP500_SOURCES:
+        try:
+            table = pd.read_csv(url)
+            symbols = (
+                table["Symbol"].astype(str).str.replace(".", "-", regex=False).tolist()
+            )
+            # Keep deterministic ordering and deduplicate.
+            return list(dict.fromkeys(symbols))
+        except Exception as exc:  # try the next source
+            last_exc = exc
+            continue
+    raise last_exc if last_exc else RuntimeError("No S&P 500 symbol source available")
 
 
 @st.cache_data(show_spinner=False)
@@ -356,7 +371,14 @@ def run() -> None:
         and set(symbols) == set(default_symbols)
     )
     if is_default_selection:
-        st.header("Top 10 RSI symbols")
+        if slow_defaults:
+            st.header("Top 10 RSI symbols")
+        else:
+            st.header("Preselected symbols")
+            st.caption(
+                "Fast preset list, not ranked by RSI. Enable "
+                "\"Use Top-RSI defaults (slow)\" in the sidebar to rank by actual RSI."
+            )
 
     if not symbols:
         st.warning("Please select at least one symbol.")
