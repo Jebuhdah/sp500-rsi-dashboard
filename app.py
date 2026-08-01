@@ -127,24 +127,32 @@ def get_top_rsi_symbols(symbols: list[str], top_n: int = 10) -> list[str]:
     return [symbol for symbol, _ in ranking[:top_n]]
 
 
-@st.dialog("Send message to chatbot")
+@st.dialog("Send message to chatbot", width="large")
 def chatbot_modal(symbol: str, latest_rsi: float) -> None:
     st.markdown(
         """
         <style>
+        /* Streamlit sets the dialog's width via an inline style tied to the
+        st.dialog(width=...) argument above; that inline style wins over a
+        plain class rule, which is why an earlier version of this override
+        had no visible effect. !important forces this rule to win so the
+        dialog (and the generated-report text inside it) actually gets the
+        wider layout instead of the cramped ~450px default. */
         div[data-testid="stDialog"] div[role="dialog"] {
-            width: min(1100px, 95vw);
+            width: min(1200px, 92vw) !important;
         }
         .difyStreamBox {
-            max-height: 500vh;
+            max-height: 65vh;
             overflow-y: auto;
-            padding: 12px 14px;
+            padding: 16px 20px;
             border: 1px solid rgba(49, 51, 63, 0.2);
             border-radius: 10px;
             background: transparent;
             white-space: pre-wrap;
             overflow-wrap: anywhere;
             word-break: break-word;
+            font-size: 1.05rem;
+            line-height: 1.55;
         }
         </style>
         """,
