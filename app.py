@@ -57,6 +57,28 @@ def _resolve_dify_api_key(ui_value: str) -> str | None:
     return secret_key or None
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_price_data(
+    symbol: str,
+    period: str,
+    interval: str,
+    database_url: str | None,
+) -> pd.DataFrame:
+    """Cache fetch_price_data results for a few minutes.
+
+    Without this, every widget interaction anywhere in the app (logging in,
+    flipping a toggle, typing into a text field, creating a portfolio
+    account, etc.) reruns the whole script, which re-downloads a full
+    yfinance history AND re-persists it to Postgres for every selected
+    symbol -- turning simple actions like "Create account" into a multi-
+    symbol network+DB round trip that can take a long time and makes the
+    app appear to hang or reset.
+    """
+    return fetch_price_data(
+        symbol=symbol, period=period, interval=interval, database_url=database_url
+    )
+
+
 _SP500_SOURCES = [
     # datahub.io's own CSV endpoint has been returning 404s; GitHub mirror of the
     # same "datasets" project (same "Symbol" column schema) as primary source now.
@@ -90,7 +112,9 @@ def get_top_rsi_symbols(symbols: list[str], top_n: int = 10) -> list[str]:
     ranking: list[tuple[str, float]] = []
     for symbol in symbols:
         try:
-            prices = fetch_price_data(symbol=symbol, period="6mo", interval="1d")
+            prices = _cached_price_data(
+                symbol=symbol, period="6mo", interval="1d", database_url=None
+            )
             rsi_series = calculate_rsi(prices["Close"], window=14).dropna()
             if not rsi_series.empty:
                 ranking.append((symbol, float(rsi_series.iloc[-1])))
@@ -439,7 +463,7 @@ def run() -> None:
         for symbol in symbols:
             with st.container():
                 try:
-                    prices = fetch_price_data(
+                    prices = _cached_price_data(
                         symbol=symbol, period="1y", interval="1d", database_url=database_url
                     )
                     prices["RSI_14"] = calculate_rsi(prices["Close"], window=14)
@@ -502,7 +526,9 @@ def run() -> None:
                 if sym in price_by_symbol:
                     continue
                 try:
-                    px = fetch_price_data(sym, period="5d", interval="1d", database_url=database_url)
+                    px = _cached_price_data(
+                        sym, period="5d", interval="1d", database_url=database_url
+                    )
                     cs = px["Close"].dropna()
                     if not cs.empty:
                         price_by_symbol[sym] = float(cs.iloc[-1])
