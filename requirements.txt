@@ -1,0 +1,10 @@
+streamlit
+yfinance
+pandas
+plotly
+pytest
+lxml
+sqlalchemy
+psycopg[binary]
+azure-monitor-opentelemetry
+requests
